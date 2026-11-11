@@ -1,0 +1,3 @@
+---
+fleet_lan_address: 192.0.2.21
+fleet_tailscale_address: proxy-a.example.invalid

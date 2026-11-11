@@ -10,6 +10,7 @@
         that:
           - fleet_transport | default('') in ['lan', 'tailscale']
           - groups['service_nodes'] | length >= 2
+          - groups['load_balancers'] | default([]) | length >= 1
           - fleet_apply | default(false) | bool
         fail_msg: Set a private inventory, select lan or tailscale, and explicitly enable fleet_apply.
 
@@ -24,6 +25,20 @@
       become: false
 
   tasks:
+    - name: Drain existing connections at every configured HAProxy
+      community.general.haproxy:
+        state: disabled
+        host: "{{ inventory_hostname }}"
+        backend: "{{ fleet_proxy_backend }}"
+        socket: "{{ hostvars[item].fleet_haproxy_socket }}"
+        fail_on_not_found: true
+        drain: true
+        wait: true
+        wait_interval: 1
+        wait_retries: 30
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['load_balancers'] }}"
+
     - name: Apply the pre-existing Compose project
       community.docker.docker_compose_v2:
         project_src: "{{ fleet_compose_project_dir }}"
@@ -31,6 +46,7 @@
         state: present
         wait: true
         wait_timeout: 120
+        recreate: "{{ fleet_recreate | default('auto') }}"
       environment: "{{ fleet_compose_env | default({}) }}"
 
     - name: Wait for this replica to report healthy before proceeding
@@ -45,3 +61,16 @@
       until: fleet_health.status | default(0) == 200
       retries: 30
       delay: 2
+
+    - name: Re-enable the healthy replica on every configured HAProxy
+      community.general.haproxy:
+        state: enabled
+        host: "{{ inventory_hostname }}"
+        backend: "{{ fleet_proxy_backend }}"
+        socket: "{{ hostvars[item].fleet_haproxy_socket }}"
+        fail_on_not_found: true
+        wait: true
+        wait_interval: 1
+        wait_retries: 30
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['load_balancers'] }}"

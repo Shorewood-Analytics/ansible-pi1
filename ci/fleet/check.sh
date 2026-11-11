@@ -26,7 +26,7 @@ for attempt in {1..20}; do
     if [[ ${attempt} == 20 ]]; then exit 1; fi
     sleep 1
 done
-args=(-i "${root}/ci/fleet/hosts.yml" "${root}/playbooks/rolling-compose.yml" -e fleet_apply=true -e fleet_transport=lan -e "fleet_compose_project_dir=${root}/ci/fleet")
+args=(-i "${root}/ci/fleet/hosts.yml" "${root}/playbooks/rolling-compose.yml" -e fleet_apply=true -e fleet_transport=lan -e fleet_recreate=always -e "fleet_compose_project_dir=${root}/ci/fleet")
 ansible-playbook "${args[@]}"
 FLEET_CI_PORT=18102 docker compose -p fleet-ci-b -f "${file}" stop
 if ansible-playbook "${args[@]}" --limit node_a; then

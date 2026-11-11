@@ -5,3 +5,4 @@ ansible_user: replace_with_ssh_user
 fleet_compose_project_dir: /opt/replace_with_service
 fleet_compose_project_name: replace_with_service
 fleet_compose_env: {}
+fleet_proxy_backend: replicas

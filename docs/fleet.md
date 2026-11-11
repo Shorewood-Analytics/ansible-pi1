@@ -31,9 +31,11 @@ The controller's health URLs must also be reachable over the selected network.
 For an existing stateless service, deploy a pinned image on at least two
 independent hosts. `playbooks/rolling-compose.yml` uses the upstream
 `community.docker.docker_compose_v2` collection, checks every peer's health
-before changing a host, applies one host at a time, waits for recovery, and
-stops at the first failure. This is a limited rolling-update primitive: **it
-does not drain traffic, coordinate a load balancer, or roll back an update.**
+before changing a host and uses upstream `community.general.haproxy` to drain
+connections on every configured HAProxy. It applies one host at a time, waits
+for recovery, re-enables the host, and stops at the first failure. Failed nodes
+remain drained for investigation. **This does not roll back an update, control
+other traffic paths, or establish that every real proxy is in the inventory.**
 
 On a LAN, HAProxy can actively check and route to multiple backends. A single
 proxy remains a single point of failure. Two independently hosted proxies plus
@@ -68,7 +70,7 @@ tag is not a production release artifact. Pin production images by digest.
 
 Before any production rollout, establish and test: a private inventory and
 recoverable vault; a reachable and authenticated controller; actual image and
-config distribution; service-specific readiness and connection draining;
+config distribution; service-specific readiness and draining on every ingress;
 redundant ingress for each network; TLS and access rules; rollback; stateful
 data replication, fencing and restore; and failover under continuous traffic.
 Zero downtime, live failover, disaster recovery and a $0 Tailscale business plan

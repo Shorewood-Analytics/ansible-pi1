@@ -36,7 +36,7 @@ jobs:
       - name: Verify serial deployment and HTTP proxy failover on the hosted runner
         run: |
           sudo apt-get update
-          sudo apt-get install -y haproxy
+          sudo apt-get install -y haproxy netcat-openbsd
           bash ci/fleet/check.sh
       - name: Verify Docker Compose on the hosted runner
         run: |
