@@ -49,6 +49,13 @@ if [[ -e ${launcher} ]] && ! grep -q '^# Managed by ansible-pi1$' "${launcher}";
     printf 'Refusing to replace an unmanaged launcher: %s\n' "${launcher}" >&2
     exit 1
 fi
+if [[ -L ${root}/current && -f ${launcher} ]]; then
+    active=$(readlink -f -- "${root}/current")
+    if [[ ${active} == "${release_dir}" ]] && cmp -s "${script_dir}/chawan-launcher.sh" "${launcher}"; then
+        printf 'Already installed: %s\n' "${revision}"
+        exit 0
+    fi
+fi
 tmp_launcher=$(mktemp "${HOME}/.local/bin/.chawan-ci.XXXXXXXX")
 install -m 700 "${script_dir}/chawan-launcher.sh" "${tmp_launcher}"
 mv -f -- "${tmp_launcher}" "${launcher}"

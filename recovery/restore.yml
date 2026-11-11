@@ -1,0 +1,92 @@
+---
+- name: Restore a host from its GitHub recovery profile
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Load private profile without displaying its contents
+      ansible.builtin.include_vars:
+        file: "{{ recovery_profile }}"
+        name: recovery
+      no_log: true
+
+    - name: Require supported OS and recovery schema
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] == 'Debian'
+          - recovery.schema == 1
+          - recovery.role in ['primary', 'shadow', 'peer']
+          - recovery.chawan_revision == None or ansible_facts['architecture'] == 'aarch64'
+      no_log: true
+
+    - name: Inspect required mount identities before making changes
+      ansible.builtin.command:
+        argv: [findmnt, --noheadings, --output, UUID, --mountpoint, "{{ item.path }}"]
+      loop: "{{ recovery.mounts }}"
+      register: recovery_mounts
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Refuse missing or mismatched mounted storage
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+          - (item.stdout | trim) == item.item.uuid
+      loop: "{{ recovery_mounts.results }}"
+      no_log: true
+
+    - name: Check existing destination paths without following final symlinks
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['user_dir'] }}/{{ item.path }}"
+        follow: false
+      loop: "{{ recovery.files }}"
+      register: recovery_destinations
+      no_log: true
+
+    - name: Refuse replacing symlinks or non-files
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists or (item.stat.isreg | default(false))
+          - not (item.stat.islnk | default(false))
+      loop: "{{ recovery_destinations.results }}"
+      no_log: true
+
+    - name: Install only explicitly pinned distribution packages
+      ansible.builtin.apt:
+        name: "{{ recovery.packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 86400
+      become: true
+      when: recovery.packages | length > 0
+      no_log: true
+
+    - name: Create private parent directories
+      ansible.builtin.file:
+        path: "{{ ansible_facts['user_dir'] }}/{{ item.path | dirname }}"
+        state: directory
+        mode: '0700'
+      loop: "{{ recovery.files }}"
+      when: (item.path | dirname) != ''
+      no_log: true
+
+    - name: Restore private configuration files atomically
+      ansible.builtin.copy:
+        src: "{{ item.source }}"
+        dest: "{{ ansible_facts['user_dir'] }}/{{ item.path }}"
+        mode: '0600'
+        backup: false
+        follow: false
+      loop: "{{ recovery.files }}"
+      no_log: true
+      diff: false
+
+    - name: Install the CI-built browser without compiling or testing
+      ansible.builtin.command:
+        argv: [bash, "{{ recovery_scripts }}/install-chawan.sh"]
+      environment:
+        CHAWAN_REVISION: "{{ recovery.chawan_revision }}"
+      register: recovery_chawan
+      changed_when: "'Installed prebuilt commit' in recovery_chawan.stdout"
+      when: recovery.chawan_revision != None
+      no_log: true

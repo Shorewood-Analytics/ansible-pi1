@@ -27,11 +27,35 @@ recording before typing secrets. Logs are not uploaded. `scriptreplay` can use
 the `.log` and `.log.timing` files. CI artifacts and logs do not establish a
 backup or protect against an SD-card failure.
 
+## GitHub recovery source
+
+The public repository holds generic tooling and all hosted CI. A separate
+**private** repository holds host profiles encrypted with native Ansible Vault.
+Its private release asset holds the recoverable vault password. One classic
+GitHub PAT with access to that repository can retrieve both. The password is
+not committed to Git history, and GitHub Actions secrets are not the recovery
+store. **Private-repository readers can recover the secrets.**
+
+`recovery/publish-profile.sh` creates the private organization repository when
+needed, disables its Actions before uploading recovery material, verifies the
+uploaded recovery key, and commits only the encrypted profile and version pin.
+`recovery/recover.sh` restores a selected profile using native Ansible. The host
+only applies configuration and installs prebuilt software. All tests, build
+jobs, and recovery rehearsals run in public GitHub-hosted CI with synthetic data.
+
+See [the recovery procedure](docs/recovery.md) for exact commands and boundaries.
+Real keys, inventories, volume identifiers and machine profiles must never be
+added to this public repository. A Git subtree has no independent privacy.
+
 ## Validation boundaries
 
 CI exercises downloads, terminal logging, integrity failures, interrupted runs,
-and prebuilt ARM64 rendering. It does not establish Pi hardware health, thermal
+and prebuilt ARM64 rendering. Recovery rehearsals use real Ansible/Vault and a
+synthetic GitHub transport; they do not verify a live private-repository restore.
+They do not establish Pi hardware health, thermal
 margin, boot recovery, target connectivity, or field readiness. Actual deployment
 and recovery procedures require the target's verified inventory, secure network
-access and a separately qualified recovery system. Chawan has its own engine;
+access and populated recovery profiles. Volume definitions are not volume data
+backups; boot-image recovery and automatic HA promotion are not implemented.
+Chawan has its own engine;
 JavaScript and some modern sites may be unsupported.

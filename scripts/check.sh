@@ -6,7 +6,7 @@ worker=$(mktemp)
 trap 'rm -f -- "${worker}"' EXIT
 awk "/^tee .*<<'INSTALLER'$/ { capture=1; next } /^INSTALLER$/ { capture=0 } capture" scripts/install-chawan-logged.sh > "${worker}"
 test -s "${worker}"
-for file in scripts/*.sh ci/*.sh "${worker}"; do
+for file in scripts/*.sh ci/*.sh recovery/*.sh "${worker}"; do
     bash -n "${file}"
     shellcheck --enable=all --severity=style "${file}"
 done

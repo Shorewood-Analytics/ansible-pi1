@@ -27,7 +27,10 @@ jobs:
         run: |
           ansible --version
           ansible-playbook -i localhost, --syntax-check ci/ansible-check.yml
+          ansible-playbook -i localhost, --syntax-check recovery/restore.yml
           ansible-playbook -i localhost, ci/ansible-check.yml
+      - name: Verify encrypted recovery and repeat deployment with synthetic data
+        run: python3 tests/test_recovery.py
       - name: Verify Docker Compose on the hosted runner
         run: |
           docker version
@@ -54,6 +57,23 @@ jobs:
       - name: Build and smoke-test inside ARM64 Debian 12
         run: |
           docker run --rm --platform linux/arm64 -v "$PWD:/src" -w /src debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc bash ci/build-chawan.sh
+      - name: Verify the bundle in clean Debian 12 and 13 containers
+        run: |
+          for image in \
+            'debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc' \
+            'debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2'; do
+            docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist:ro" "$image" bash -e -o pipefail -c '
+              cd /dist; sha256sum -c chawan-arm64-bookworm.tar.gz.sha256
+              mkdir /app; tar -xzf chawan-arm64-bookworm.tar.gz -C /app
+              cd /app; sha256sum -c SHA256SUMS
+              export LD_LIBRARY_PATH=/app/lib
+              ldd /app/libexec/chawan/cgi-bin/ssl > /tmp/links
+              if grep "not found" /tmp/links; then exit 1; fi
+              /app/bin/cha -v
+              echo "<html><body>CLEAN_RUNTIME_OK</body></html>" > /tmp/page.html
+              /app/bin/cha --dump /tmp/page.html | grep CLEAN_RUNTIME_OK
+            '
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: chawan-arm64-bookworm
