@@ -1,0 +1,8 @@
+---
+- name: Verify Ansible operates on the disposable hosted runner
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Exercise Ansible on the hosted runner
+      ansible.builtin.ping:
