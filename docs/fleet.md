@@ -62,8 +62,10 @@ fencing merely by increasing replicas.
 ## Verification and remaining work
 
 The public hosted rehearsal uses two disposable Compose projects and one
-HAProxy, exercises the actual `community.docker` playbook, refuses an update
-when the peer is down, and checks proxy routing after either backend stops. Both
+HAProxy with a temporary test certificate. It exercises the `community.docker`
+and `community.general` modules, makes HTTPS requests during a rolling
+recreation, refuses an update when the peer is down, and checks proxy routing
+after either backend stops. Both
 simulated nodes share one runner; this is not evidence of independent host,
 network, proxy, tailnet, TLS, or storage failure recovery. The test-only nginx
 tag is not a production release artifact. Pin production images by digest.
