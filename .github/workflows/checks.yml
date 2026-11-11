@@ -1,0 +1,108 @@
+name: Build and validate Pi tooling
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pi-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  configuration-tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned ShellCheck
+        run: |
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz -o /tmp/shellcheck.tar.xz
+          echo '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  /tmp/shellcheck.tar.xz' | sha256sum -c -
+          tar -xf /tmp/shellcheck.tar.xz -C /tmp
+          echo /tmp/shellcheck-v0.11.0 >> "$GITHUB_PATH"
+      - name: Check installer, logging, and failure cases
+        run: bash scripts/check.sh
+      - name: Verify Ansible on the hosted runner
+        run: |
+          ansible --version
+          ansible-playbook -i localhost, --syntax-check ci/ansible-check.yml
+          ansible-playbook -i localhost, --syntax-check recovery/restore.yml
+          ansible-playbook -i localhost, ci/ansible-check.yml
+      - name: Verify encrypted recovery and repeat deployment with synthetic data
+        run: python3 tests/test_recovery.py
+      - name: Install pinned upstream collections on the hosted runner
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: Verify serial deployment and HTTP proxy failover on the hosted runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y haproxy netcat-openbsd
+          bash ci/fleet/check.sh
+      - name: Verify Docker Compose on the hosted runner
+        run: |
+          docker version
+          docker compose version
+          docker compose -f ci/compose.yaml config --quiet
+          trap 'docker compose -f ci/compose.yaml down --remove-orphans' EXIT
+          docker compose -f ci/compose.yaml up -d
+          docker compose -f ci/compose.yaml exec -T smoke true
+      - name: Verify kubectl and a disposable Kubernetes cluster
+        run: |
+          kubectl version --client
+          kind version
+          trap 'kind delete cluster --name ci-check' EXIT
+          kind create cluster --name ci-check --wait 180s
+          kubectl wait --for=condition=Ready node --all --timeout=120s
+          kubectl create configmap ci-check --from-literal=source=github-actions --dry-run=server -o yaml
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build and smoke-test inside ARM64 Debian 12
+        run: |
+          docker run --rm --platform linux/arm64 -e GITHUB_ACTIONS -e RUNNER_ENVIRONMENT -v "$PWD:/src" -w /src debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc bash ci/build-chawan.sh
+      - name: Verify the bundle in clean Debian 12 and 13 containers
+        run: |
+          for image in \
+            'debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc' \
+            'debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2'; do
+            docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist:ro" "$image" bash -e -o pipefail -c '
+              cd /dist; sha256sum -c chawan-arm64-bookworm.tar.gz.sha256
+              mkdir /app; tar -xzf chawan-arm64-bookworm.tar.gz -C /app
+              cd /app; sha256sum -c SHA256SUMS
+              export LD_LIBRARY_PATH=/app/lib
+              ldd /app/libexec/chawan/cgi-bin/ssl > /tmp/links
+              if grep "not found" /tmp/links; then exit 1; fi
+              /app/bin/cha -v
+              echo "<html><body>CLEAN_RUNTIME_OK</body></html>" > /tmp/page.html
+              /app/bin/cha --dump /tmp/page.html | grep CLEAN_RUNTIME_OK
+            '
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chawan-arm64-bookworm
+          path: dist/chawan-arm64-bookworm.tar.gz*
+          if-no-files-found: error
+          retention-days: 14
+  publish-candidate:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/pi-terminal-installers')
+    needs: [configuration-tools, build-arm64]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: chawan-arm64-bookworm
+          path: dist
+      - name: Publish commit-specific candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          sha256sum -c chawan-arm64-bookworm.tar.gz.sha256
+          gh release create "build-${GITHUB_SHA}" --target "${GITHUB_SHA}" --prerelease --title "CI candidate ${GITHUB_SHA}" --notes 'CI-built candidate; field hardware qualification is not implied.' chawan-arm64-bookworm.tar.gz chawan-arm64-bookworm.tar.gz.sha256

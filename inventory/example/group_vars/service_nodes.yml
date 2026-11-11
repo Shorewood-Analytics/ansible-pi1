@@ -1,0 +1,8 @@
+---
+# Select explicitly with -e fleet_transport=lan or -e fleet_transport=tailscale.
+ansible_host: "{{ fleet_lan_address if fleet_transport == 'lan' else fleet_tailscale_address }}"
+ansible_user: replace_with_ssh_user
+fleet_compose_project_dir: /opt/replace_with_service
+fleet_compose_project_name: replace_with_service
+fleet_compose_env: {}
+fleet_proxy_backend: replicas

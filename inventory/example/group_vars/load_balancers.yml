@@ -1,0 +1,4 @@
+---
+ansible_host: "{{ fleet_lan_address if fleet_transport == 'lan' else fleet_tailscale_address }}"
+ansible_user: replace_with_ssh_user
+fleet_haproxy_socket: /run/haproxy/admin.sock
