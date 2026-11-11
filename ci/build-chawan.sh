@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Runs only in the GitHub-hosted Debian ARM64 build container.
 set -euo pipefail
+if [[ ${GITHUB_ACTIONS:-} != true || ${RUNNER_ENVIRONMENT:-} != github-hosted ]]; then
+    printf '%s\n' 'Compilation is restricted to GitHub-hosted CI.' >&2
+    exit 1
+fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y build-essential curl ca-certificates xz-utils pkg-config libssl-dev libssh2-1-dev libbrotli-dev binutils

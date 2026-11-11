@@ -25,10 +25,6 @@ if ! gh api "repos/${config_repo}" > "${recovery_work}/repo.json" 2> "${recovery
         -F has_issues=false -F has_wiki=false > "${recovery_work}/repo.json"
 fi
 recovery_private
-# This must succeed before any secret or encrypted profile is uploaded.
-gh api --method PUT "repos/${config_repo}/actions/permissions" -F enabled=false >/dev/null
-actions_enabled=$(gh api "repos/${config_repo}/actions/permissions" --jq '.enabled')
-[[ ${actions_enabled} == false ]]
 branch=$(gh api "repos/${config_repo}" --jq '.default_branch')
 [[ ${branch} =~ ^[A-Za-z0-9_.-]+$ ]] || { printf '%s\n' 'Use a simple default branch name.' >&2; exit 1; }
 parent=$(gh api "repos/${config_repo}/git/ref/heads/${branch}" --jq '.object.sha')
@@ -46,6 +42,12 @@ if [[ -f ${recovery_work}/existing/recovery.json ]]; then
     key_release=${manifest[1]}
     key_asset=${manifest[2]}
 else
+    python3 - "${recovery_work}/existing" <<'PY'
+from pathlib import Path
+import sys
+if {p.name for p in Path(sys.argv[1]).iterdir()} - {"README.md"}:
+    raise SystemExit("Refusing to initialize an unrelated non-empty private repository.")
+PY
     key_release=recovery-key-v1
     key_asset=vault-password
     python3 - "${tooling_revision}" > "${recovery_work}/changes/recovery.json" <<'PY'
@@ -54,6 +56,10 @@ print(json.dumps({"schema": 1, "tooling_revision": sys.argv[1],
                   "key_release": "recovery-key-v1", "key_asset": "vault-password"}, indent=2))
 PY
 fi
+# This must succeed before any secret or encrypted profile is uploaded.
+gh api --method PUT "repos/${config_repo}/actions/permissions" -F enabled=false >/dev/null
+actions_enabled=$(gh api "repos/${config_repo}/actions/permissions" --jq '.enabled')
+[[ ${actions_enabled} == false ]]
 if gh release view "${key_release}" --repo "${config_repo}" >/dev/null 2>&1; then
     gh release download "${key_release}" --repo "${config_repo}" --pattern "${key_asset}" --output "${recovery_work}/vault-password"
 else

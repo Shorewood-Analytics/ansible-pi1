@@ -5,7 +5,6 @@ import io
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -200,12 +199,33 @@ class Recovery(unittest.TestCase):
         bad = dict(self.profile, packages=["tmux"])
         with self.assertRaises(ValueError):
             CONFIG.profile(bad)
+
+    def test_capture_preserves_line_endings_and_never_overwrites(self):
+        self.dest.parent.mkdir()
+        content = b"KEY=synthetic\r\nNEXT=literal\r\n"
+        self.dest.write_bytes(content)
+        capture = self.work / "capture.json"
+        cmd = ["python3", str(ROOT / "recovery/capture.py"), "--role", "shadow", "--file", self.relative, "--output", str(capture)]
+        result = subprocess.run(cmd, text=True, capture_output=True, check=True)
+        self.assertNotIn("KEY=synthetic", result.stdout + result.stderr)
+        self.assertEqual(json.loads(capture.read_text())["files"][0]["content"].encode(), content)
+        self.assertEqual(capture.stat().st_mode & 0o777, 0o600)
+        result = subprocess.run(cmd, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_unrelated_private_repository_is_not_modified(self):
+        state = {"exists": True, "visibility": "private", "enabled": True, "head": "1"*40, "files": {"unrelated.py": "pass\n"}}
+        self.state.write_text(json.dumps(state))
+        self.run_script("publish-profile.sh", "example/private-config", "shadow", str(self.source), success=False)
+        state = json.loads(self.state.read_text())
+        self.assertTrue(state["enabled"])
+        self.assertNotIn("keys", state)
         bad = dict(self.profile, files=[{"path": "../escape", "content": "synthetic"}])
         with self.assertRaises(ValueError):
             CONFIG.profile(bad)
 
 
 if __name__ == "__main__":
-    if not os.environ.get("GITHUB_ACTIONS"):
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
         raise SystemExit("Run recovery rehearsals on GitHub-hosted CI, never on the Pi.")
     unittest.main(verbosity=2)
