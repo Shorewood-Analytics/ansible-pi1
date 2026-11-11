@@ -31,6 +31,13 @@ jobs:
           ansible-playbook -i localhost, ci/ansible-check.yml
       - name: Verify encrypted recovery and repeat deployment with synthetic data
         run: python3 tests/test_recovery.py
+      - name: Install pinned upstream collections on the hosted runner
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: Verify serial deployment and HTTP proxy failover on the hosted runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y haproxy
+          bash ci/fleet/check.sh
       - name: Verify Docker Compose on the hosted runner
         run: |
           docker version

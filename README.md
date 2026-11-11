@@ -1,5 +1,11 @@
 # pi1 configuration
 
+**Fleet architecture revision:** [fleet design and qualification](docs/fleet.md)
+describes standard Ansible inventory, reusable upstream collections, LAN and
+Tailscale access, and the exact HA guarantees not yet established. The earlier
+`recovery/` prototype is retained for inspection but is not the recommended
+fleet implementation or a qualified recovery system.
+
 The Pi is an operational target, not a build or test runner. GitHub-hosted
 ARM64 CI builds Chawan in Debian 12, checks it, and publishes a commit-specific
 candidate only after the configuration-tool checks pass. CI exercises Ansible,
@@ -27,23 +33,12 @@ recording before typing secrets. Logs are not uploaded. `scriptreplay` can use
 the `.log` and `.log.timing` files. CI artifacts and logs do not establish a
 backup or protect against an SD-card failure.
 
-## GitHub recovery source
+## Previous recovery prototype (superseded for fleet design)
 
-The public repository holds generic tooling and all hosted CI. A separate
-**private** repository holds host profiles encrypted with native Ansible Vault.
-Its private release asset holds the recoverable vault password. One classic
-GitHub PAT with access to that repository can retrieve both. The password is
-not committed to Git history, and GitHub Actions secrets are not the recovery
-store. **Private-repository readers can recover the secrets.**
-
-`recovery/publish-profile.sh` creates the private organization repository when
-needed, disables its Actions before uploading recovery material, verifies the
-uploaded recovery key, and commits only the encrypted profile and version pin.
-`recovery/recover.sh` restores a selected profile using native Ansible. The host
-only applies configuration and installs prebuilt software. All tests, build
-jobs, and recovery rehearsals run in public GitHub-hosted CI with synthetic data.
-
-See [the recovery procedure](docs/recovery.md) for exact commands and boundaries.
+The earlier PAT-based recovery prototype and its
+[procedure](docs/recovery.md) remain available for comparison. They predate the
+standard shared inventory and have not been qualified against a real private
+GitHub repository. Do not treat this prototype as an established backup.
 Real keys, inventories, volume identifiers and machine profiles must never be
 added to this public repository. A Git subtree has no independent privacy.
 

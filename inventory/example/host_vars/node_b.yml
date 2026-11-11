@@ -1,0 +1,4 @@
+---
+fleet_lan_address: 192.0.2.12
+fleet_tailscale_address: node-b.example.invalid
+fleet_health_url: "http://{{ fleet_lan_address if fleet_transport == 'lan' else fleet_tailscale_address }}:8080/health"

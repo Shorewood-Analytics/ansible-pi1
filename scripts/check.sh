@@ -11,7 +11,7 @@ trap 'rm -f -- "${worker}"' EXIT
 awk "/^tee .*<<'INSTALLER'$/ { capture=1; next } /^INSTALLER$/ { capture=0 } capture" scripts/install-chawan-logged.sh > "${worker}"
 test -s "${worker}"
 check_status=0
-for file in scripts/*.sh ci/*.sh recovery/*.sh "${worker}"; do
+for file in scripts/*.sh ci/*.sh ci/fleet/*.sh recovery/*.sh "${worker}"; do
     bash -n "${file}" || check_status=1
     shellcheck --external-sources --enable=all --severity=style "${file}" || check_status=1
 done
