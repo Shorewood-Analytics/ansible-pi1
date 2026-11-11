@@ -25,7 +25,7 @@ def main():
         source.resolve(strict=True).relative_to(home)
         if source.is_symlink() or not source.is_file() or source.stat().st_size > 1024 * 1024:
             raise ValueError("selected file must be a regular text file under 1 MiB")
-        data["files"].append({"path": value, "content": source.read_text()})
+        data["files"].append({"path": value, "content": source.read_bytes().decode("utf-8")})
     for value in args.mount:
         uuid = subprocess.check_output(["findmnt", "--noheadings", "--output", "UUID", "--mountpoint", value], text=True).strip()
         data["mounts"].append({"path": value, "uuid": uuid})

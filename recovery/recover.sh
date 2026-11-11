@@ -23,7 +23,8 @@ if [[ -z ${config_revision} ]]; then
     config_revision=$(gh api "repos/${config_repo}/commits/HEAD" --jq '.sha')
 fi
 [[ ${config_revision} =~ ^[0-9a-f]{40}$ ]] || exit 1
-printf '%s Resolving committed recovery configuration.\n' "$(date -u +%FT%TZ)"
+timestamp=$(date -u +%FT%TZ)
+printf '%s Resolving committed recovery configuration.\n' "${timestamp}"
 gh api "repos/${config_repo}/tarball/${config_revision}" > "${recovery_work}/config.tar.gz"
 python3 "${recovery_root}/recovery/config.py" extract "${recovery_work}/config.tar.gz" "${recovery_work}/config"
 python3 "${recovery_root}/recovery/config.py" manifest "${recovery_work}/config/recovery.json" > "${recovery_work}/manifest"
@@ -50,4 +51,5 @@ PY
 printf 'Applying configuration %s with tooling %s.\n' "${config_revision}" "${tooling_revision}"
 ansible-playbook -i localhost, -c local "${recovery_root}/recovery/restore.yml" \
     -e "@${recovery_work}/inputs.json"
-printf '%s Recovery configuration applied.\n' "$(date -u +%FT%TZ)"
+timestamp=$(date -u +%FT%TZ)
+printf '%s Recovery configuration applied.\n' "${timestamp}"

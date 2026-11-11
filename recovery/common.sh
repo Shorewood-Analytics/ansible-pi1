@@ -11,7 +11,9 @@ recovery_require() {
 }
 
 recovery_workspace() {
-    [[ $(findmnt -n -o FSTYPE --target /dev/shm) == tmpfs ]] || {
+    local recovery_fs
+    recovery_fs=$(findmnt -n -o FSTYPE --target /dev/shm)
+    [[ ${recovery_fs} == tmpfs ]] || {
         printf '%s\n' 'Recovery requires /dev/shm on tmpfs for temporary credentials.' >&2
         return 1
     }
@@ -35,7 +37,7 @@ recovery_token() {
 
 recovery_private() {
     local visibility
-    visibility=$(gh api "repos/${config_repo}" --jq '.visibility')
+    visibility=$(gh api "repos/${config_repo:?Caller must select a repository}" --jq '.visibility')
     [[ ${visibility} == private ]] || {
         printf '%s\n' 'Refusing to read or write recovery material in a non-private repository.' >&2
         return 1
@@ -43,7 +45,7 @@ recovery_private() {
 }
 
 recovery_revision() {
-    tooling_revision=$(git -C "${recovery_root}" rev-parse HEAD)
+    tooling_revision=$(git -C "${recovery_root:?Caller must select the tooling checkout}" rev-parse HEAD)
     [[ ${tooling_revision} =~ ^[0-9a-f]{40}$ ]]
     git -C "${recovery_root}" diff --quiet HEAD -- recovery scripts || {
         printf '%s\n' 'Use a clean, commit-pinned public tooling checkout.' >&2

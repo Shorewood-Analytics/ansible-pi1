@@ -27,7 +27,8 @@ fi
 recovery_private
 # This must succeed before any secret or encrypted profile is uploaded.
 gh api --method PUT "repos/${config_repo}/actions/permissions" -F enabled=false >/dev/null
-[[ $(gh api "repos/${config_repo}/actions/permissions" --jq '.enabled') == false ]]
+actions_enabled=$(gh api "repos/${config_repo}/actions/permissions" --jq '.enabled')
+[[ ${actions_enabled} == false ]]
 branch=$(gh api "repos/${config_repo}" --jq '.default_branch')
 [[ ${branch} =~ ^[A-Za-z0-9_.-]+$ ]] || { printf '%s\n' 'Use a simple default branch name.' >&2; exit 1; }
 parent=$(gh api "repos/${config_repo}/git/ref/heads/${branch}" --jq '.object.sha')
@@ -81,6 +82,7 @@ commit=$(gh api --method POST "repos/${config_repo}/git/commits" -f "message=Upd
 recovery_private
 # A concurrent writer causes a non-fast-forward error instead of losing updates.
 gh api --method PATCH "repos/${config_repo}/git/refs/heads/${branch}" -f "sha=${commit}" -F force=false >/dev/null
-[[ $(gh api "repos/${config_repo}/git/ref/heads/${branch}" --jq '.object.sha') == "${commit}" ]]
+published_head=$(gh api "repos/${config_repo}/git/ref/heads/${branch}" --jq '.object.sha')
+[[ ${published_head} == "${commit}" ]]
 printf 'Published encrypted configuration %s; private Actions are disabled.\n' "${commit}"
 printf 'Restore from the pinned public checkout: bash recovery/recover.sh %q %q %q\n' "${config_repo}" "${profile}" "${commit}"
